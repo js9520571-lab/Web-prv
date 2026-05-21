@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Anamorphic Background Illusion</title>
+    <style>
+        /* Reset margins and ensure the body fills the viewport */
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        background-color: #050508;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #ffffff;
+    }
+
+    /* Make the illusion canvas a fixed background layer */
+    #illusion-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1; /* Pushes it behind HTML content */
+        pointer-events: auto; /* Allows mouse tracking */
+    }
+
+    /* Example overlay content to show it works as a background */
+    .content-container {
+        position: relative;
+        z-index: 1;
+        max-width: 600px;
+        margin: 15vh auto;
+        padding: 30px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        backdrop-filter: blur(8px); /* Lets the illusion peak through softly */
+        text-align: center;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+        letter-spacing: 2px;
+        background: linear-gradient(45deg, #00f3ff, #ff00c8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    p {
+        line-height: 1.6;
+        color: #b0b5c0;
+    }
+    </style>
+</head>
+<body>
+
+    <!-- The Illusion Canvas Layer -->
+    <canvas id="illusion-canvas"></canvas>
+
+    <!-- UI Overlay Layer -->
+    <div class="content-container">
+        <h1>Anamorphic Depth</h1>
+        <p>Move your cursor across the screen. The background uses pseudo-3D matrix calculations to warp the space, turning your flat display into an interactive hologram chamber.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('illusion-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        // Mouse target coordinates for tracking depth perspective
+        let mouse = { x: width / 2, y: height / 2, targetX: width / 2, targetY: height / 2 };
+
+        // Handle screen resizing smoothly
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        // Track pointer movement
+        window.addEventListener('mousemove', (e) => {
+            mouse.targetX = e.clientX;
+            mouse.targetY = e.clientY;
+        });
+
+        // Fallback/interaction for touch devices
+        window.addEventListener('touchmove', (e) => {
+            if(e.touches.length > 0) {
+                mouse.targetX = e.touches[0].clientX;
+                mouse.targetY = e.touches[0].clientY;
+            }
+        });
+
+        // Simple particle system inside the 3D grid room
+        const particles = [];
+        const numParticles = 45;
+
+        for (let i = 0; i < numParticles; i++) {
+            particles.push({
+                x: (Math.random() - 0.5) * 800,
+                y: (Math.random() - 0.5) * 800,
+                z: Math.random() * 1000,
+                speed: 1 + Math.random() * 2
+            });
+        }
+
+        // Projecting 3D points (X, Y, Z) into 2D screen coordinates based on perspective offsets
+        function project(x, y, z, offsetX, offsetY) {
+            const fov = 400; // Field of View (Depth scaling factor)
+            // Apply anamorphic distortion relative to distance from camera (Z axis)
+            const scale = fov / (fov + z);
+            return {
+                x: (x + offsetX * (z * 0.0015)) * scale + width / 2,
+                y: (y + offsetY * (z * 0.0015)) * scale + height / 2,
+                scale: scale
+            };
+        }
+
+        function animate() {
+            // Clear space with slight alpha for a subtle neon glow streak effect
+            ctx.fillStyle = 'rgba(5, 5, 8, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Smooth out mouse tracking using linear interpolation (lerp)
+            mouse.x += (mouse.targetX - mouse.x) * 0.08;
+            mouse.y += (mouse.targetY - mouse.y) * 0.08;
+
+            // Calculate look-at skewing angles based on cursor offset from center
+            const offsetX = (mouse.x - width / 2);
+            const offsetY = (mouse.y - height / 2);
+
+            // --- DRAW THE 3D TUNNEL CHAMBER LINES ---
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.05)';
+            ctx.lineWidth = 1;
+
+            const depthSlices = [0, 200, 400, 600, 800, 1000];
+            const boxSize = 400;
+
+            // Draw bounding framework rings going back into the Z-depth
+            depthSlices.forEach(z => {
+                const p1 = project(-boxSize, -boxSize, z, offsetX, offsetY);
+                const p2 = project(boxSize, -boxSize, z, offsetX, offsetY);
+                const p3 = project(boxSize, boxSize, z, offsetX, offsetY);
+                const p4 = project(-boxSize, boxSize, z, offsetX, offsetY);
+
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
+                ctx.closePath();
+                ctx.stroke();
+            });
+
+            // Draw connecting structural perspective corners
+            const frontCorners = [-boxSize, boxSize];
+            frontCorners.forEach(bx => {
+                frontCorners.forEach(by => {
+                    const nearPoint = project(bx, by, 0, offsetX, offsetY);
+                    const farPoint = project(bx, by, 1000, offsetX, offsetY);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(nearPoint.x, nearPoint.y);
+                    ctx.lineTo(farPoint.x, farPoint.y);
+                    ctx.strokeStyle = 'rgba(255, 0, 200, 0.03)';
+                    ctx.stroke();
+                });
+            });
+
+            // --- DRAW AND UPDATE FLOATING NODES ---
+            particles.forEach(p => {
+                // Move particle forward through the tunnel
+                p.z -= p.speed;
+                if (p.z <= 0) {
+                    p.z = 1000; // Recycle back to infinite depth distance
+                }
+
+                const pos = project(p.x, p.y, p.z, offsetX, offsetY);
+
+                // Check if projected bounds fall inside viewable area
+                if (pos.x >= 0 && pos.x <= width && pos.y >= 0 && pos.y <= height) {
+                    const size = Math.max(0.5, pos.scale * 3);
+                    const alpha = Math.min(1, (1000 - p.z) / 400) * 0.7; // Fade in from depth
+
+                    // Shift color palette from Cyan to Magenta depending on depth index
+                    ctx.fillStyle = p.z > 500 ? `rgba(0, 243, 255, ${alpha})` : `rgba(255, 0, 200, ${alpha})`;
+                    
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+  </html>
